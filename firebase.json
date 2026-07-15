@@ -1,0 +1,32 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "agi-othm-attendance",
+          "configurations": {
+            "ios": "1:462775634583:ios:161c3cd16ec858f32637d2",
+            "macos": "1:462775634583:ios:161c3cd16ec858f32637d2",
+            "web": "1:462775634583:web:728768d5a2461e762637d2",
+            "windows": "1:462775634583:web:9e36247c0ff6dcd12637d2"
+          }
+        }
+      }
+    }
+  }
+}
