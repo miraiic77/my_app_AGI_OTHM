@@ -74,10 +74,13 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
   }
 
   Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Present': return Colors.green;
-      case 'Absent': return Colors.red;
-      case 'Absent': return Colors.orange;
+    switch (status.toLowerCase()) {
+      case 'present': return Colors.green;
+      case 'absent': return Colors.red;
+      case 'off': return Colors.blue;
+      case 'holiday': return Colors.orange;
+      case 'course completed': return Colors.teal;
+      case 'not started': return Colors.grey;
       default: return Colors.grey;
     }
   }
@@ -86,56 +89,50 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-  title: const Text('View Reports'),
-  backgroundColor: Colors.teal,
-  foregroundColor: Colors.white,
-  actions: [
-    FutureBuilder<bool>(
-      future: RoleService().isAdmin(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || !snapshot.data!) {
-          return const SizedBox.shrink();
-        }
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.sync),
-              tooltip: 'Sync to Google Sheets',
-              onPressed: _syncToGoogleSheets,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_sweep),
-              tooltip: 'Monthly Cleanup',
-              onPressed: _monthlyCleanup,
-            ),
+        title: const Text('View Reports'),
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
+        actions: [
+          FutureBuilder<bool>(
+            future: RoleService().isAdmin(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || !snapshot.data!) {
+                return const SizedBox.shrink();
+              }
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.sync),
+                    tooltip: 'Sync to Google Sheets',
+                    onPressed: _syncToGoogleSheets,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_sweep),
+                    tooltip: 'Monthly Cleanup',
+                    onPressed: _monthlyCleanup,
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.red,
+          labelColor: Colors.red,
+          unselectedLabelColor: Colors.amber,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          isScrollable: true,
+          tabs: const [
+            Tab(text: 'Student Reports'), 
+            Tab(text: 'Faculty Reports'),
+            Tab(text: 'Monthly Summary'),
+            Tab(text: 'Visual Analytics'),
           ],
-        );
-      },
-    ),
-  ],
-  bottom: TabBar(
-    controller: _tabController,
-    indicatorColor: Colors.red,           // Red underline for active tab
-    labelColor: Colors.red,               // Red text for active tab
-    unselectedLabelColor: Colors.amber,   // Bright yellow for inactive tabs
-    labelStyle: const TextStyle(
-      fontWeight: FontWeight.bold,
-      fontSize: 14,
-    ),
-    unselectedLabelStyle: const TextStyle(
-      fontWeight: FontWeight.w600,
-      fontSize: 13,
-    ),
-    isScrollable: true,
-    tabs: const [
-      Tab(text: 'Student Reports'), 
-      Tab(text: 'Faculty Reports'),
-      Tab(text: 'Monthly Summary'),
-      Tab(text: 'Visual Analytics'),
-    ],
-  ), // <-- This closes the TabBar
-),   // <-- This closes the AppBar
+        ),
+      ),
       body: Column(
         children: [
           Container(
@@ -263,10 +260,13 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                 return date.compareTo(startDateStr) >= 0 && date.compareTo(endDateStr) <= 0;
               }).toList();
 
-              int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
-              int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
-              int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
-              int total = present + absent + late;
+              int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').length;
+              int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').length;
+              int off = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'off').length;
+              int holiday = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'holiday').length;
+              int cc = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'course completed').length;
+              int ns = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'not started').length;
+              int total = present + absent + off + holiday + cc + ns;
 
               if (total == 0) {
                 return const Center(child: Text('No attendance records found for the selected date range.'));
@@ -280,7 +280,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                 final status = data['status'] ?? '';
                 
                 batchTotal[batchName] = (batchTotal[batchName] ?? 0) + 1;
-                if (status == 'Present' || status == 'Absent') {
+                if (status.toLowerCase() == 'present' || status.toLowerCase() == 'absent') {
                   batchPresent[batchName] = (batchPresent[batchName] ?? 0) + 1;
                 }
               }
@@ -302,16 +302,14 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                       children: [
                         SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Total', '$total', Colors.blue)),
                         SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Present', '$present', Colors.green, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').toList();
-                          _showAttendanceList('Present List', list, _isFacultyAnalytics);
+                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').toList();
+                          final title = _isFacultyAnalytics ? 'Present Faculty' : 'Present Students'; // ✅ DYNAMIC TITLE
+                          _showAttendanceList(title, list, _isFacultyAnalytics);
                         })),
                         SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$absent', Colors.red, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
-                          _showAttendanceList('Absent List', list, _isFacultyAnalytics);
-                        })),
-                        SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$late', Colors.orange, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
-                          _showAttendanceList('Late List', list, _isFacultyAnalytics);
+                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').toList();
+                          final title = _isFacultyAnalytics ? 'Absent Faculty' : 'Absent Students'; // ✅ DYNAMIC TITLE
+                          _showAttendanceList(title, list, _isFacultyAnalytics);
                         })),
                       ],
                     ),
@@ -338,7 +336,8 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                                 sections: [
                                   if (present > 0) PieChartSectionData(value: present.toDouble(), title: 'Present\n${((present/total)*100).toStringAsFixed(0)}%', color: Colors.green, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
                                   if (absent > 0) PieChartSectionData(value: absent.toDouble(), title: 'Absent\n${((absent/total)*100).toStringAsFixed(0)}%', color: Colors.red, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                                  if (late > 0) PieChartSectionData(value: late.toDouble(), title: 'Late\n${((late/total)*100).toStringAsFixed(0)}%', color: Colors.orange, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  if (off > 0) PieChartSectionData(value: off.toDouble(), title: 'Off\n${((off/total)*100).toStringAsFixed(0)}%', color: Colors.blue, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  if (holiday > 0) PieChartSectionData(value: holiday.toDouble(), title: 'Holiday\n${((holiday/total)*100).toStringAsFixed(0)}%', color: Colors.orange, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
                                 ],
                               ),
                             ),
@@ -461,8 +460,13 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                       itemCount: records.length,
                       itemBuilder: (context, index) {
                         final data = records[index].data() as Map<String, dynamic>;
-                        final name = isFaculty ? (data['facultyName'] ?? 'Unknown') : (data['studentName'] ?? 'Unknown');
-                        final rollOrSubject = isFaculty ? (data['subject'] ?? 'N/A') : (data['rollNumber'] ?? 'N/A');
+                        
+                        // ✅ ROBUST NAME EXTRACTION: Checks multiple possible field names
+                        final name = isFaculty 
+                            ? (data['facultyName'] ?? data['name'] ?? data['faculty'] ?? 'Unknown Faculty') 
+                            : (data['studentName'] ?? data['name'] ?? 'Unknown Student');
+                            
+                        final rollOrSubject = isFaculty ? (data['subject'] ?? data['email'] ?? 'N/A') : (data['rollNumber'] ?? 'N/A');
                         final batch = data['batchName'] ?? '';
                         final date = data['date'] ?? '';
                         final status = data['status'] ?? '';
@@ -524,10 +528,10 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
         }
 
         int totalRecords = filteredRecords.length;
-        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
-        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
-        int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
-        double attendancePercentage = totalRecords > 0 ? ((present + late) / totalRecords * 100) : 0;
+        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').length;
+        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').length;
+        int workingDays = present + absent;
+        double attendancePercentage = workingDays > 0 ? ((present / workingDays) * 100) : 0;
 
         return SingleChildScrollView(
           child: Column(
@@ -542,16 +546,12 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                     children: [
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Total', '$totalRecords', Colors.blue)),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Present', '$present', Colors.green, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').toList();
                         _showAttendanceList('Present Students', list, false);
                       })),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$absent', Colors.red, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').toList();
                         _showAttendanceList('Absent Students', list, false);
-                      })),
-                      SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$late', Colors.orange, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
-                        _showAttendanceList('Late Students', list, false);
                       })),
                     ],
                   ), 
@@ -576,11 +576,12 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                   final rollNumber = firstRecord['rollNumber'] ?? 'N/A';
                   final batchName = firstRecord['batchName'] ?? 'N/A';
                   
-                  int studentPresent = records.where((r) => r['status'] == 'Present').length;
-                  int studentAbsent = records.where((r) => r['status'] == 'Absent').length;
-                  int studentLate = records.where((r) => r['status'] == 'Absent').length;
+                  int studentPresent = records.where((r) => r['status']?.toString().toLowerCase() == 'present').length;
+                  int studentAbsent = records.where((r) => r['status']?.toString().toLowerCase() == 'absent').length;
                   int studentTotal = records.length;
-                  double studentPercentage = studentTotal > 0 ? ((studentPresent + studentLate) / studentTotal * 100) : 0;
+                  
+                  int workingDaysStudent = studentPresent + studentAbsent;
+                  double studentPercentage = workingDaysStudent > 0 ? ((studentPresent / workingDaysStudent) * 100) : 0;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -594,7 +595,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                           Text('Roll: $rollNumber | Batch: $batchName', style: const TextStyle(fontSize: 12, color: Colors.grey), overflow: TextOverflow.ellipsis, maxLines: 1),
                         ],
                       ),
-                      subtitle: Text('Attendance: ${studentPercentage.toStringAsFixed(0)}% (${studentPresent}P/${studentAbsent}A/${studentLate}L)', style: TextStyle(color: studentPercentage >= 75 ? Colors.green : studentPercentage >= 50 ? Colors.orange : Colors.red, fontWeight: FontWeight.bold)),
+                      subtitle: Text('Attendance: ${studentPercentage.toStringAsFixed(0)}% (${studentPresent}P/${studentAbsent}A)', style: TextStyle(color: studentPercentage >= 75 ? Colors.green : studentPercentage >= 50 ? Colors.orange : Colors.red, fontWeight: FontWeight.bold)),
                       trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: studentPercentage >= 75 ? Colors.green.shade100 : studentPercentage >= 50 ? Colors.orange.shade100 : Colors.red.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: studentPercentage >= 75 ? Colors.green : studentPercentage >= 50 ? Colors.orange : Colors.red)), child: Text('${studentTotal}', style: TextStyle(color: studentPercentage >= 75 ? Colors.green.shade700 : studentPercentage >= 50 ? Colors.orange.shade700 : Colors.red.shade700, fontWeight: FontWeight.bold, fontSize: 12))),
                       children: [
                         Container(
@@ -664,10 +665,10 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
         }
 
         int totalRecords = filteredRecords.length;
-        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
-        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
-        int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
-        double attendancePercentage = totalRecords > 0 ? ((present + late) / totalRecords * 100) : 0;
+        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').length;
+        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').length;
+        int workingDays = present + absent;
+        double attendancePercentage = workingDays > 0 ? ((present / workingDays) * 100) : 0;
 
         return SingleChildScrollView(
           child: Column(
@@ -682,16 +683,12 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                     children: [
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Total', '$totalRecords', Colors.blue)),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Present', '$present', Colors.green, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').toList();
                         _showAttendanceList('Present Faculty', list, true);
                       })),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$absent', Colors.red, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').toList();
                         _showAttendanceList('Absent Faculty', list, true);
-                      })),
-                      SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$late', Colors.orange, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
-                        _showAttendanceList('Late Faculty', list, true);
                       })),
                     ],
                   ),
@@ -715,11 +712,12 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                   final facultyName = firstRecord['facultyName'] ?? 'Unknown';
                   final subject = firstRecord['subject'] ?? 'N/A';
                   
-                  int facultyPresent = records.where((r) => r['status'] == 'Present').length;
-                  int facultyAbsent = records.where((r) => r['status'] == 'Absent').length;
-                  int facultyLate = records.where((r) => r['status'] == 'Absent').length;
+                  int facultyPresent = records.where((r) => r['status']?.toString().toLowerCase() == 'present').length;
+                  int facultyAbsent = records.where((r) => r['status']?.toString().toLowerCase() == 'absent').length;
                   int facultyTotal = records.length;
-                  double facultyPercentage = facultyTotal > 0 ? ((facultyPresent + facultyLate) / facultyTotal * 100) : 0;
+                  
+                  int workingDaysFaculty = facultyPresent + facultyAbsent;
+                  double facultyPercentage = workingDaysFaculty > 0 ? ((facultyPresent / workingDaysFaculty) * 100) : 0;
 
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
@@ -733,7 +731,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                           Text('Subject: $subject', style: const TextStyle(fontSize: 12, color: Colors.grey), overflow: TextOverflow.ellipsis, maxLines: 1),
                         ],
                       ),
-                      subtitle: Text('Attendance: ${facultyPercentage.toStringAsFixed(0)}% (${facultyPresent}P/${facultyAbsent}A/${facultyLate}L)', style: TextStyle(color: facultyPercentage >= 75 ? Colors.green : facultyPercentage >= 50 ? Colors.orange : Colors.red, fontWeight: FontWeight.bold)),
+                      subtitle: Text('Attendance: ${facultyPercentage.toStringAsFixed(0)}% (${facultyPresent}P/${facultyAbsent}A)', style: TextStyle(color: facultyPercentage >= 75 ? Colors.green : facultyPercentage >= 50 ? Colors.orange : Colors.red, fontWeight: FontWeight.bold)),
                       trailing: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: facultyPercentage >= 75 ? Colors.green.shade100 : facultyPercentage >= 50 ? Colors.orange.shade100 : Colors.red.shade100, borderRadius: BorderRadius.circular(20), border: Border.all(color: facultyPercentage >= 75 ? Colors.green : facultyPercentage >= 50 ? Colors.orange : Colors.red)), child: Text('${facultyTotal}', style: TextStyle(color: facultyPercentage >= 75 ? Colors.green.shade700 : facultyPercentage >= 50 ? Colors.orange.shade700 : Colors.red.shade700, fontWeight: FontWeight.bold, fontSize: 12))),
                       children: [
                         Container(
@@ -806,7 +804,10 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
               'totalStudents': <String>{},
               'Present': 0,
               'Absent': 0,
-              'Absent': 0,
+              'Off': 0,
+              'Holiday': 0,
+              'Course Completed': 0,
+              'Not Started': 0,
             };
           }
           
@@ -815,9 +816,12 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
             (batchSummary[batchId]!['totalStudents'] as Set<String>).add(studentId);
           }
           
-          if (status == 'Present') batchSummary[batchId]!['Present']++;
-          else if (status.toLowerCase() == 'Absent') batchSummary[batchId]!['Absent']++;
-          else if (status == 'Absent') batchSummary[batchId]!['Absent']++;
+          if (status.toLowerCase() == 'present') batchSummary[batchId]!['Present']++;
+          else if (status.toLowerCase() == 'absent') batchSummary[batchId]!['Absent']++;
+          else if (status.toLowerCase() == 'off') batchSummary[batchId]!['Off']++;
+          else if (status.toLowerCase() == 'holiday') batchSummary[batchId]!['Holiday']++;
+          else if (status.toLowerCase() == 'course completed') batchSummary[batchId]!['Course Completed']++;
+          else if (status.toLowerCase() == 'not started') batchSummary[batchId]!['Not Started']++;
         }
 
         List<Map<String, dynamic>> summaryList = batchSummary.entries.map((entry) {
@@ -826,9 +830,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
           final totalStudents = (data['totalStudents'] as Set<String>).length;
           final present = data['Present'] as int;
           final absent = data['Absent'] as int;
-          final late = data['Absent'] as int;
-          final totalRecords = present + absent + late;
-          final percentage = totalRecords > 0 ? ((present + late) / totalRecords * 100) : 0;
+          
+          final workingDays = present + absent;
+          final percentage = workingDays > 0 ? ((present / workingDays) * 100) : 0;
           
           return {
             'batchId': batchId,
@@ -836,8 +840,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
             'totalStudents': totalStudents,
             'Present': present,
             'Absent': absent,
-            'Absent': late,
-            'totalRecords': totalRecords,
+            'Off': data['Off'] as int,
+            'Holiday': data['Holiday'] as int,
+            'workingDays': workingDays,
             'percentage': percentage,
           };
         }).toList();
@@ -889,7 +894,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                   final totalStudents = data['totalStudents'] as int;
                   final present = data['Present'] as int;
                   final absent = data['Absent'] as int;
-                  final late = data['Absent'] as int;
+                  final off = data['Off'] as int;
                   final percentage = data['percentage'] as double;
                   
                   final color = percentage >= 75 ? Colors.green : percentage >= 50 ? Colors.orange : Colors.red;
@@ -933,7 +938,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Total Students', '$totalStudents', Colors.blue)),
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Present', '$present', Colors.green)),
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Absent', '$absent', Colors.red)),
-                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Absent', '$late', Colors.orange)),
+                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Off', '$off', Colors.blue.shade300)),
                             ],
                           ),
                         ],
@@ -1012,7 +1017,20 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
 
     final newStatus = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(title: const Text('Select New Status'), content: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.check_circle, color: Colors.green), title: const Text('Present'), onTap: () => Navigator.pop(ctx, 'Present')), ListTile(leading: const Icon(Icons.cancel, color: Colors.red), title: const Text('Absent'), onTap: () => Navigator.pop(ctx, 'Absent')), ListTile(leading: const Icon(Icons.access_time, color: Colors.orange), title: const Text('Absent'), onTap: () => Navigator.pop(ctx, 'Absent'))])),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select New Status'), 
+        content: Column(
+          mainAxisSize: MainAxisSize.min, 
+          children: [
+            ListTile(leading: const Icon(Icons.check_circle, color: Colors.green), title: const Text('Present'), onTap: () => Navigator.pop(ctx, 'Present')), 
+            ListTile(leading: const Icon(Icons.cancel, color: Colors.red), title: const Text('Absent'), onTap: () => Navigator.pop(ctx, 'Absent')), 
+            ListTile(leading: const Icon(Icons.block, color: Colors.blue), title: const Text('Off'), onTap: () => Navigator.pop(ctx, 'Off')), 
+            ListTile(leading: const Icon(Icons.celebration, color: Colors.orange), title: const Text('Holiday'), onTap: () => Navigator.pop(ctx, 'Holiday')), 
+            ListTile(leading: const Icon(Icons.school, color: Colors.teal), title: const Text('Course Completed'), onTap: () => Navigator.pop(ctx, 'Course Completed')), 
+            ListTile(leading: const Icon(Icons.hourglass_empty, color: Colors.grey), title: const Text('Not Started'), onTap: () => Navigator.pop(ctx, 'Not Started')), 
+          ]
+        ),
+      ),
     );
     if (newStatus == null) return;
 
@@ -1065,7 +1083,8 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
         'Year': _selectedYear,
         'Present': data['Present'],
         'Absent': data['Absent'],
-        'Absent': data['Absent'],
+        'Off': data['Off'],
+        'Holiday': data['Holiday'],
         'Attendance %': '${(data['percentage'] as double).toStringAsFixed(1)}%',
       };
     }).toList();
@@ -1114,140 +1133,137 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
     }
   }
 
-  // ✅ NEW: Monthly Cleanup with Safety Checks
   Future<void> _monthlyCleanup() async {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => const Center(child: CircularProgressIndicator()),
-  );
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
 
-  try {
-    // Check for unsynced records
-    final unsyncedStudents = await FirebaseFirestore.instance
-        .collection('student_attendance')
-        .where('syncedToSheet', isEqualTo: false)
-        .get();
+    try {
+      final unsyncedStudents = await FirebaseFirestore.instance
+          .collection('student_attendance')
+          .where('syncedToSheet', isEqualTo: false)
+          .get();
 
-    final unsyncedFaculty = await FirebaseFirestore.instance
-        .collection('faculty_attendance')
-        .where('syncedToSheet', isEqualTo: false)
-        .get();
+      final unsyncedFaculty = await FirebaseFirestore.instance
+          .collection('faculty_attendance')
+          .where('syncedToSheet', isEqualTo: false)
+          .get();
 
-    if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
 
-    if (unsyncedStudents.docs.isNotEmpty || unsyncedFaculty.docs.isNotEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Row(children: [Icon(Icons.warning, color: Colors.orange), SizedBox(width: 8), Text('⚠️ Cannot Cleanup')]),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Some records are not yet synced to Google Sheets:'),
-              const SizedBox(height: 12),
-              if (unsyncedStudents.docs.isNotEmpty)
-                Text('• ${unsyncedStudents.docs.length} student records unsynced'),
-              if (unsyncedFaculty.docs.isNotEmpty)
-                Text('• ${unsyncedFaculty.docs.length} faculty records unsynced'),
-              const SizedBox(height: 12),
-              const Text('Please sync all records first!', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+      if (unsyncedStudents.docs.isNotEmpty || unsyncedFaculty.docs.isNotEmpty) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Row(children: [Icon(Icons.warning, color: Colors.orange), SizedBox(width: 8), Text('⚠️ Cannot Cleanup')]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Some records are not yet synced to Google Sheets:'),
+                const SizedBox(height: 12),
+                if (unsyncedStudents.docs.isNotEmpty)
+                  Text('• ${unsyncedStudents.docs.length} student records unsynced'),
+                if (unsyncedFaculty.docs.isNotEmpty)
+                  Text('• ${unsyncedFaculty.docs.length} faculty records unsynced'),
+                const SizedBox(height: 12),
+                const Text('Please sync all records first!', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
             ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _syncToGoogleSheets();
-              },
-              icon: const Icon(Icons.sync),
-              label: const Text('Sync Now'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    // ✅ SIMPLIFIED: Just ask user if they exported CSV
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Row(children: [Icon(Icons.delete_forever, color: Colors.red), SizedBox(width: 8), Text('🧹 Monthly Cleanup')]),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('This will permanently delete ALL attendance records.'),
-              const SizedBox(height: 16),
-              _buildCheckItem('All records synced to Google Sheets', true),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(child: Text('Make sure you have exported CSV backup before proceeding!', style: TextStyle(fontSize: 12))),
-                  ],
-                ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
               ),
-              const SizedBox(height: 12),
-              const Text('Type "DELETE" to confirm:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              TextField(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Type DELETE',
-                ),
-                onChanged: (value) {
-                  if (value == 'DELETE') {
-                    Navigator.pop(ctx);
-                    _confirmAndDeleteAll();
-                  }
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _syncToGoogleSheets();
                 },
+                icon: const Icon(Icons.sync),
+                label: const Text('Sync Now'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
+        );
+        return;
+      }
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Row(children: [Icon(Icons.delete_forever, color: Colors.red), SizedBox(width: 8), Text('🧹 Monthly Cleanup')]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('This will permanently delete ALL attendance records.'),
+                const SizedBox(height: 16),
+                _buildCheckItem('All records synced to Google Sheets', true),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(child: Text('Make sure you have exported CSV backup before proceeding!', style: TextStyle(fontSize: 12))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('Type "DELETE" to confirm:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Type DELETE',
+                  ),
+                  onChanged: (value) {
+                    if (value == 'DELETE') {
+                      Navigator.pop(ctx);
+                      _confirmAndDeleteAll();
+                    }
+                  },
+                ),
+              ],
             ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _exportAllAttendanceCsv();
-              },
-              icon: const Icon(Icons.file_download),
-              label: const Text('Export CSV First'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-            ),
-          ],
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) Navigator.pop(context);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
-      );
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _exportAllAttendanceCsv();
+                },
+                icon: const Icon(Icons.file_download),
+                label: const Text('Export CSV First'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
-}
 
   Widget _buildCheckItem(String label, bool isChecked) {
     return Padding(
