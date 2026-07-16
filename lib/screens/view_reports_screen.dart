@@ -75,9 +75,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'present': return Colors.green;
-      case 'absent': return Colors.red;
-      case 'late': return Colors.orange;
+      case 'Present': return Colors.green;
+      case 'Absent': return Colors.red;
+      case 'Absent': return Colors.orange;
       default: return Colors.grey;
     }
   }
@@ -263,9 +263,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                 return date.compareTo(startDateStr) >= 0 && date.compareTo(endDateStr) <= 0;
               }).toList();
 
-              int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'present').length;
-              int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'absent').length;
-              int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'late').length;
+              int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
+              int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
+              int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
               int total = present + absent + late;
 
               if (total == 0) {
@@ -280,7 +280,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                 final status = data['status'] ?? '';
                 
                 batchTotal[batchName] = (batchTotal[batchName] ?? 0) + 1;
-                if (status == 'present' || status == 'late') {
+                if (status == 'Present' || status == 'Absent') {
                   batchPresent[batchName] = (batchPresent[batchName] ?? 0) + 1;
                 }
               }
@@ -302,15 +302,15 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                       children: [
                         SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Total', '$total', Colors.blue)),
                         SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Present', '$present', Colors.green, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'present').toList();
+                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').toList();
                           _showAttendanceList('Present List', list, _isFacultyAnalytics);
                         })),
                         SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$absent', Colors.red, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'absent').toList();
+                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
                           _showAttendanceList('Absent List', list, _isFacultyAnalytics);
                         })),
-                        SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Late', '$late', Colors.orange, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'late').toList();
+                        SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$late', Colors.orange, onTap: () {
+                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
                           _showAttendanceList('Late List', list, _isFacultyAnalytics);
                         })),
                       ],
@@ -524,9 +524,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
         }
 
         int totalRecords = filteredRecords.length;
-        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'present').length;
-        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'absent').length;
-        int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'late').length;
+        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
+        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
+        int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
         double attendancePercentage = totalRecords > 0 ? ((present + late) / totalRecords * 100) : 0;
 
         return SingleChildScrollView(
@@ -542,15 +542,15 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                     children: [
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Total', '$totalRecords', Colors.blue)),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Present', '$present', Colors.green, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'present').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').toList();
                         _showAttendanceList('Present Students', list, false);
                       })),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$absent', Colors.red, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'absent').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
                         _showAttendanceList('Absent Students', list, false);
                       })),
-                      SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Late', '$late', Colors.orange, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'late').toList();
+                      SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$late', Colors.orange, onTap: () {
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
                         _showAttendanceList('Late Students', list, false);
                       })),
                     ],
@@ -576,9 +576,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                   final rollNumber = firstRecord['rollNumber'] ?? 'N/A';
                   final batchName = firstRecord['batchName'] ?? 'N/A';
                   
-                  int studentPresent = records.where((r) => r['status'] == 'present').length;
-                  int studentAbsent = records.where((r) => r['status'] == 'absent').length;
-                  int studentLate = records.where((r) => r['status'] == 'late').length;
+                  int studentPresent = records.where((r) => r['status'] == 'Present').length;
+                  int studentAbsent = records.where((r) => r['status'] == 'Absent').length;
+                  int studentLate = records.where((r) => r['status'] == 'Absent').length;
                   int studentTotal = records.length;
                   double studentPercentage = studentTotal > 0 ? ((studentPresent + studentLate) / studentTotal * 100) : 0;
 
@@ -664,9 +664,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
         }
 
         int totalRecords = filteredRecords.length;
-        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'present').length;
-        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'absent').length;
-        int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'late').length;
+        int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
+        int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
+        int late = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').length;
         double attendancePercentage = totalRecords > 0 ? ((present + late) / totalRecords * 100) : 0;
 
         return SingleChildScrollView(
@@ -682,15 +682,15 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                     children: [
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Total', '$totalRecords', Colors.blue)),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Present', '$present', Colors.green, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'present').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').toList();
                         _showAttendanceList('Present Faculty', list, true);
                       })),
                       SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$absent', Colors.red, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'absent').toList();
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
                         _showAttendanceList('Absent Faculty', list, true);
                       })),
-                      SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Late', '$late', Colors.orange, onTap: () {
-                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'late').toList();
+                      SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$late', Colors.orange, onTap: () {
+                        final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Absent').toList();
                         _showAttendanceList('Late Faculty', list, true);
                       })),
                     ],
@@ -715,9 +715,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                   final facultyName = firstRecord['facultyName'] ?? 'Unknown';
                   final subject = firstRecord['subject'] ?? 'N/A';
                   
-                  int facultyPresent = records.where((r) => r['status'] == 'present').length;
-                  int facultyAbsent = records.where((r) => r['status'] == 'absent').length;
-                  int facultyLate = records.where((r) => r['status'] == 'late').length;
+                  int facultyPresent = records.where((r) => r['status'] == 'Present').length;
+                  int facultyAbsent = records.where((r) => r['status'] == 'Absent').length;
+                  int facultyLate = records.where((r) => r['status'] == 'Absent').length;
                   int facultyTotal = records.length;
                   double facultyPercentage = facultyTotal > 0 ? ((facultyPresent + facultyLate) / facultyTotal * 100) : 0;
 
@@ -804,9 +804,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
             batchSummary[batchId] = {
               'batchName': batchName,
               'totalStudents': <String>{},
-              'present': 0,
-              'absent': 0,
-              'late': 0,
+              'Present': 0,
+              'Absent': 0,
+              'Absent': 0,
             };
           }
           
@@ -815,18 +815,18 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
             (batchSummary[batchId]!['totalStudents'] as Set<String>).add(studentId);
           }
           
-          if (status == 'present') batchSummary[batchId]!['present']++;
-          else if (status == 'absent') batchSummary[batchId]!['absent']++;
-          else if (status == 'late') batchSummary[batchId]!['late']++;
+          if (status == 'Present') batchSummary[batchId]!['Present']++;
+          else if (status.toLowerCase() == 'Absent') batchSummary[batchId]!['Absent']++;
+          else if (status == 'Absent') batchSummary[batchId]!['Absent']++;
         }
 
         List<Map<String, dynamic>> summaryList = batchSummary.entries.map((entry) {
           final batchId = entry.key;
           final data = entry.value;
           final totalStudents = (data['totalStudents'] as Set<String>).length;
-          final present = data['present'] as int;
-          final absent = data['absent'] as int;
-          final late = data['late'] as int;
+          final present = data['Present'] as int;
+          final absent = data['Absent'] as int;
+          final late = data['Absent'] as int;
           final totalRecords = present + absent + late;
           final percentage = totalRecords > 0 ? ((present + late) / totalRecords * 100) : 0;
           
@@ -834,9 +834,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
             'batchId': batchId,
             'batchName': data['batchName'],
             'totalStudents': totalStudents,
-            'present': present,
-            'absent': absent,
-            'late': late,
+            'Present': present,
+            'Absent': absent,
+            'Absent': late,
             'totalRecords': totalRecords,
             'percentage': percentage,
           };
@@ -887,9 +887,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                   final data = summaryList[index];
                   final batchName = data['batchName'] as String;
                   final totalStudents = data['totalStudents'] as int;
-                  final present = data['present'] as int;
-                  final absent = data['absent'] as int;
-                  final late = data['late'] as int;
+                  final present = data['Present'] as int;
+                  final absent = data['Absent'] as int;
+                  final late = data['Absent'] as int;
                   final percentage = data['percentage'] as double;
                   
                   final color = percentage >= 75 ? Colors.green : percentage >= 50 ? Colors.orange : Colors.red;
@@ -933,7 +933,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Total Students', '$totalStudents', Colors.blue)),
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Present', '$present', Colors.green)),
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Absent', '$absent', Colors.red)),
-                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Late', '$late', Colors.orange)),
+                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Absent', '$late', Colors.orange)),
                             ],
                           ),
                         ],
@@ -1012,7 +1012,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
 
     final newStatus = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(title: const Text('Select New Status'), content: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.check_circle, color: Colors.green), title: const Text('Present'), onTap: () => Navigator.pop(ctx, 'present')), ListTile(leading: const Icon(Icons.cancel, color: Colors.red), title: const Text('Absent'), onTap: () => Navigator.pop(ctx, 'absent')), ListTile(leading: const Icon(Icons.access_time, color: Colors.orange), title: const Text('Late'), onTap: () => Navigator.pop(ctx, 'late'))])),
+      builder: (ctx) => AlertDialog(title: const Text('Select New Status'), content: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.check_circle, color: Colors.green), title: const Text('Present'), onTap: () => Navigator.pop(ctx, 'Present')), ListTile(leading: const Icon(Icons.cancel, color: Colors.red), title: const Text('Absent'), onTap: () => Navigator.pop(ctx, 'Absent')), ListTile(leading: const Icon(Icons.access_time, color: Colors.orange), title: const Text('Absent'), onTap: () => Navigator.pop(ctx, 'Absent'))])),
     );
     if (newStatus == null) return;
 
@@ -1063,9 +1063,9 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
         'Total Students': data['totalStudents'],
         'Month': _getMonthName(_selectedMonth),
         'Year': _selectedYear,
-        'Present': data['present'],
-        'Absent': data['absent'],
-        'Late': data['late'],
+        'Present': data['Present'],
+        'Absent': data['Absent'],
+        'Absent': data['Absent'],
         'Attendance %': '${(data['percentage'] as double).toStringAsFixed(1)}%',
       };
     }).toList();

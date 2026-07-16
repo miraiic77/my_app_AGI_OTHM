@@ -79,15 +79,41 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     setState(() => _isLoading = false);
   }
 
-  Future<void> _saveAttendance() async {
-    if (_students.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No students to mark attendance for')));
-      return;
-    }
+ Future<void> _saveAttendance() async {
+  if (_students.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No students to mark attendance for')));
+    return;
+  }
 
+  // Check if attendance already exists
+  final dateStr = _formatDate(_selectedDate);
+  final existing = await FirebaseFirestore.instance
+      .collection('student_attendance')
+      .where('date', isEqualTo: dateStr)
+      .where('batchId', isEqualTo: _selectedBatchId)
+      .get();
+
+  if (existing.docs.isNotEmpty) {
+    // Show confirmation dialog for update
+    bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('⚠️ Attendance Already Marked'),
+      content: Text('Attendance for ${_students.length} students on ${dateStr} already exists. Do you want to UPDATE it?'),
+          actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(ctx, true), 
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+          child: const Text('Update Anyway'),
+        ),
+      ],
+    ));
+
+    if (confirm != true) return; // User cancelled
+  } else {
+    // First time save confirmation
     bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
       title: const Text('Save Attendance'),
-      content: Text('Save attendance for ${_students.length} students on ${_formatDate(_selectedDate)}?'),
+      content: Text('Save attendance for ${_students.length} students on ${dateStr}?'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
         ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
@@ -95,55 +121,56 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     ));
 
     if (confirm != true) return;
-    setState(() => _isSaving = true);
+  }
 
-    try {
-      final dateStr = _formatDate(_selectedDate);
-      final currentUser = FirebaseAuth.instance.currentUser;
+  setState(() => _isSaving = true);
 
-      final existing = await FirebaseFirestore.instance
-          .collection('student_attendance')
-          .where('date', isEqualTo: dateStr)
-          .where('batchId', isEqualTo: _selectedBatchId)
-          .get();
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
 
+    // Delete existing records if any (for update)
+    if (existing.docs.isNotEmpty) {
       for (var doc in existing.docs) await doc.reference.delete();
+    }
 
-      final batch = FirebaseFirestore.instance.batch();
-      for (var student in _students) {
-        final status = _attendanceStatus[student['id']] ?? 'Present';
-        final docRef = FirebaseFirestore.instance.collection('student_attendance').doc();
-        batch.set(docRef, {
-          'date': dateStr,
-          'batchId': _selectedBatchId,
-          'batchName': _selectedBatchName ?? '',
-          'studentId': student['id'],
-          'studentName': student['name'],
-          'rollNumber': student['rollNumber'],
-          'status': status,
-          'markedBy': currentUser?.email ?? 'Unknown',
-          'markedAt': Timestamp.now(),
-          'syncedToSheet': false,
-        });
-      }
-      
-      await batch.commit();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Attendance saved successfully!'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
-      }
+    final batch = FirebaseFirestore.instance.batch();
+    for (var student in _students) {
+      final status = _attendanceStatus[student['id']] ?? 'Present';
+      final docRef = FirebaseFirestore.instance.collection('student_attendance').doc();
+      batch.set(docRef, {
+        'date': dateStr,
+        'batchId': _selectedBatchId,
+        'batchName': _selectedBatchName ?? '',
+        'studentId': student['id'],
+        'studentName': student['name'],
+        'rollNumber': student['rollNumber'],
+        'status': status,
+        'markedBy': currentUser?.email ?? 'Unknown',
+        'markedAt': Timestamp.now(),
+        'syncedToSheet': false,
+      });
     }
     
+    await batch.commit();
+    
     if (mounted) {
-      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(existing.docs.isNotEmpty ? '✅ Attendance updated successfully!' : '✅ Attendance saved successfully!'), 
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
     }
   }
+  
+  if (mounted) {
+    setState(() => _isSaving = false);
+  }
+}
 
   void _markAllStatus(String status) { 
     setState(() { 
@@ -453,8 +480,8 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) { 
-      case 'present': return Colors.green; 
-      case 'absent': return Colors.red; 
+      case 'Present': return Colors.green; 
+      case 'Absent': return Colors.red; 
       case 'off': return Colors.blue; 
       case 'holiday': return Colors.orange; 
       case 'course completed': return Colors.teal; 

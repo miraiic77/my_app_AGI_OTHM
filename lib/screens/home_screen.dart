@@ -231,7 +231,7 @@ class HomeScreen extends StatelessWidget {
         int percentage = 0;
         if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
           final records = snapshot.data!.docs;
-          int present = records.where((r) => (r.data() as Map<String, dynamic>)['status'] == 'present').length;
+          int present = records.where((r) => (r.data() as Map<String, dynamic>)['status'] == 'Present').length;
           int total = records.length;
           percentage = total > 0 ? (present / total * 100).round() : 0;
         }
