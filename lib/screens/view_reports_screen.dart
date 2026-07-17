@@ -636,11 +636,12 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
   }
 
   // 📅 Builds the Monthly Summary tab
+     // 📅 Builds the Monthly Summary tab with clickable stats
   Widget _buildMonthlySummary() {
     final monthStr = _selectedMonth.toString().padLeft(2, '0');
     final yearStr = _selectedYear.toString();
     final startDate = '$yearStr-$monthStr-01';
-    final endDate = '$yearStr-$monthStr-31';
+    final endDate = '$yearStr-$monthStr-31'; // Safe upper bound for string comparison
     
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -654,7 +655,7 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error loading monthly data: ${snapshot.error}\n\nCheck F12 Console for missing index link.'));
+          return Center(child: Text('Error: ${snapshot.error}'));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('No attendance records found for this month.'));
@@ -668,17 +669,32 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
           final batchId = data['batchId'] ?? 'unknown';
           final batchName = data['batchName'] ?? 'Unknown';
           final status = (data['status'] ?? '').toLowerCase();
+          final studentId = data['studentId'] ?? '';
+          final studentName = data['studentName'] ?? '';
+          final rollNumber = data['rollNumber'] ?? '';
           
           if (!batchSummary.containsKey(batchId)) {
             batchSummary[batchId] = {
               'batchName': batchName,
               'totalStudents': <String>{},
-              'Present': 0, 'Absent': 0, 'Off': 0, 'Holiday': 0, 'Course Completed': 0, 'Not Started': 0,
+              'Present': 0, 'Absent': 0, 'Off': 0, 'Holiday': 0, 
+              'Course Completed': 0, 'Not Started': 0,
+              'presentStudents': <Map<String, String>>[],
+              'absentStudents': <Map<String, String>>[],
             };
           }
           
-          final studentId = data['studentId'] ?? '';
-          if (studentId.isNotEmpty) (batchSummary[batchId]!['totalStudents'] as Set<String>).add(studentId);
+          if (studentId.isNotEmpty) {
+            (batchSummary[batchId]!['totalStudents'] as Set<String>).add(studentId);
+            
+            // Store student details for present/absent
+            final Map<String, String> studentInfo = {'name': studentName, 'roll': rollNumber, 'id': studentId};
+            if (status == 'present') {
+              (batchSummary[batchId]!['presentStudents'] as List<Map<String, String>>).add(studentInfo);
+            } else if (status == 'absent') {
+              (batchSummary[batchId]!['absentStudents'] as List<Map<String, String>>).add(studentInfo);
+            }
+          }
           
           if (status == 'present') batchSummary[batchId]!['Present']++;
           else if (status == 'absent') batchSummary[batchId]!['Absent']++;
@@ -697,10 +713,13 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
           final percentage = workingDays > 0 ? ((present / workingDays) * 100) : 0;
           
           return {
+            'batchId': entry.key,
             'batchName': data['batchName'],
             'totalStudents': totalStudents,
             'Present': present, 'Absent': absent, 'Off': data['Off'] as int, 'Holiday': data['Holiday'] as int,
             'percentage': percentage,
+            'presentStudents': data['presentStudents'],
+            'absentStudents': data['absentStudents'],
           };
         }).toList();
 
@@ -774,8 +793,14 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                             spacing: 8, runSpacing: 8,
                             children: [
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Total Students', '$totalStudents', Colors.blue)),
-                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Present', '$present', Colors.green)),
-                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Absent', '$absent', Colors.red)),
+                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Present', '$present', Colors.green, onTap: () {
+                                final students = (data['presentStudents'] as List?)?.cast<Map<String, String>>() ?? [];
+                                _showStudentListBottomSheet('Present Students - $batchName', students, 'Present');
+                              })),
+                              SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Absent', '$absent', Colors.red, onTap: () {
+                                final students = (data['absentStudents'] as List?)?.cast<Map<String, String>>() ?? [];
+                                _showStudentListBottomSheet('Absent Students - $batchName', students, 'Absent');
+                              })),
                               SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildSummaryStatWrap('Off', '$off', Colors.blue.shade300)),
                             ],
                           ),
@@ -792,10 +817,65 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
     );
   }
 
-  // 📊 Builds the Visual Analytics tab
+  // 📋 Shows bottom sheet with student list
+  void _showStudentListBottomSheet(String title, List<Map<String, String>> students, String status) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Column(
+            children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+              ]),
+              const Divider(),
+              const SizedBox(height: 8),
+              Expanded(
+                child: students.isEmpty 
+                  ? const Center(child: Text('No students found.'))
+                  : ListView.builder(
+                      itemCount: students.length,
+                      itemBuilder: (context, index) {
+                        final student = students[index];
+                        final color = status == 'Present' ? Colors.green : Colors.red;
+                        final name = student['name'] ?? 'Unknown';
+                        
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: color,
+                              child: Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : '?', 
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                              ),
+                            ),
+                            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text('Roll: ${student['roll'] ?? 'N/A'}'),
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                              child: Text(status.toUpperCase(), style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // 📊 Builds the Visual Analytics tab with batch-wise pie charts
   Widget _buildVisualAnalytics() {
-    final collectionName = _isFacultyAnalytics ? 'faculty_attendance' : 'student_attendance';
-    final titleText = _isFacultyAnalytics ? 'Faculty Analytics' : 'Student Analytics';
     final startDateStr = _formatDate(_startDate);
     final endDateStr = _formatDate(_endDate);
 
@@ -806,16 +886,14 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ChoiceChip(label: const Text('Students'), selected: !_isFacultyAnalytics, onSelected: (val) => setState(() => _isFacultyAnalytics = false), selectedColor: Colors.teal),
-              const SizedBox(width: 12),
-              ChoiceChip(label: const Text('Faculty'), selected: _isFacultyAnalytics, onSelected: (val) => setState(() => _isFacultyAnalytics = true), selectedColor: Colors.teal),
+              const Text('Visual Analytics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
             ],
           ),
         ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection(collectionName)
+                .collection('student_attendance')
                 .where('date', isGreaterThanOrEqualTo: startDateStr)
                 .where('date', isLessThanOrEqualTo: endDateStr)
                 .orderBy('date', descending: true)
@@ -825,86 +903,110 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError) {
-                return Center(child: Text('Error loading analytics: ${snapshot.error}\n\nCheck F12 Console for missing index link.'));
+                return Center(child: Text('Error: ${snapshot.error}'));
               }
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Center(child: Text('No attendance records found for the selected date range.'));
               }
               
               final allRecords = snapshot.data!.docs;
-              var filteredRecords = allRecords;
-
-              int present = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').length;
-              int absent = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').length;
-              int off = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'off').length;
-              int holiday = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'holiday').length;
-              int total = present + absent + off + holiday;
-
-              if (total == 0) return const Center(child: Text('No attendance records found for the selected date range.'));
-
-              Map<String, int> batchPresent = {};
-              Map<String, int> batchTotal = {};
-              for (var doc in filteredRecords) {
+              
+              // Group records by batch
+              Map<String, List<QueryDocumentSnapshot>> batchesMap = {};
+              for (var doc in allRecords) {
                 final data = doc.data() as Map<String, dynamic>;
                 final batchName = data['batchName'] ?? 'Unknown';
-                final status = (data['status'] ?? '').toLowerCase();
-                
-                batchTotal[batchName] = (batchTotal[batchName] ?? 0) + 1;
-                if (status == 'present' || status == 'absent') {
-                  batchPresent[batchName] = (batchPresent[batchName] ?? 0) + 1;
+                if (!batchesMap.containsKey(batchName)) {
+                  batchesMap[batchName] = [];
                 }
+                batchesMap[batchName]!.add(doc);
               }
-
-              final batches = batchTotal.keys.toList();
-              final maxTotal = batches.isEmpty ? 10 : batchTotal.values.reduce((a, b) => a > b ? a : b);
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(titleText, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8, runSpacing: 8,
-                      children: [
-                        SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Total', '$total', Colors.blue)),
-                        SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Present', '$present', Colors.green, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').toList();
-                          _showAttendanceList(_isFacultyAnalytics ? 'Present Faculty' : 'Present Students', list, _isFacultyAnalytics);
-                        })),
-                        SizedBox(width: (MediaQuery.of(context).size.width - 56) / 2, child: _buildStatCardWrap('Absent', '$absent', Colors.red, onTap: () {
-                          final list = filteredRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').toList();
-                          _showAttendanceList(_isFacultyAnalytics ? 'Absent Faculty' : 'Absent Students', list, _isFacultyAnalytics);
-                        })),
-                      ],
-                    ),
+                    Text('Attendance by Batch - ${_getMonthName(_startDate.month)} ${_startDate.year}', 
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
                     const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Overall Status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            height: 250,
-                            child: PieChart(
-                              PieChartData(
-                                sectionsSpace: 2, centerSpaceRadius: 40,
-                                sections: [
-                                  if (present > 0) PieChartSectionData(value: present.toDouble(), title: 'Present\n${((present/total)*100).toStringAsFixed(0)}%', color: Colors.green, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                                  if (absent > 0) PieChartSectionData(value: absent.toDouble(), title: 'Absent\n${((absent/total)*100).toStringAsFixed(0)}%', color: Colors.red, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                                  if (off > 0) PieChartSectionData(value: off.toDouble(), title: 'Off\n${((off/total)*100).toStringAsFixed(0)}%', color: Colors.blue, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                                  if (holiday > 0) PieChartSectionData(value: holiday.toDouble(), title: 'Holiday\n${((holiday/total)*100).toStringAsFixed(0)}%', color: Colors.orange, radius: 50, titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ...batchesMap.entries.map((entry) {
+                      final batchName = entry.key;
+                      final batchRecords = entry.value;
+                      
+                      int present = batchRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'present').length;
+                      int absent = batchRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'absent').length;
+                      int off = batchRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'off').length;
+                      int holiday = batchRecords.where((doc) => (doc.data() as Map<String, dynamic>)['status']?.toString().toLowerCase() == 'holiday').length;
+                      int total = present + absent + off + holiday;
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 20),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(batchName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal)),
+                              const SizedBox(height: 16),
+                              if (total == 0)
+                                const Center(child: Text('No attendance data for this batch', style: TextStyle(color: Colors.grey)))
+                              else
+                                SizedBox(
+                                  height: 250,
+                                  child: PieChart(
+                                    PieChartData(
+                                      sectionsSpace: 2,
+                                      centerSpaceRadius: 40,
+                                      sections: [
+                                        if (present > 0) PieChartSectionData(
+                                          value: present.toDouble(), 
+                                          title: 'Present\n${((present/total)*100).toStringAsFixed(0)}%', 
+                                          color: Colors.green, 
+                                          radius: 60, 
+                                          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)
+                                        ),
+                                        if (absent > 0) PieChartSectionData(
+                                          value: absent.toDouble(), 
+                                          title: 'Absent\n${((absent/total)*100).toStringAsFixed(0)}%', 
+                                          color: Colors.red, 
+                                          radius: 60, 
+                                          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)
+                                        ),
+                                        if (off > 0) PieChartSectionData(
+                                          value: off.toDouble(), 
+                                          title: 'Off\n${((off/total)*100).toStringAsFixed(0)}%', 
+                                          color: Colors.blue, 
+                                          radius: 60, 
+                                          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)
+                                        ),
+                                        if (holiday > 0) PieChartSectionData(
+                                          value: holiday.toDouble(), 
+                                          title: 'Holiday\n${((holiday/total)*100).toStringAsFixed(0)}%', 
+                                          color: Colors.orange, 
+                                          radius: 60, 
+                                          titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildMiniStatChip('Total', '$total', Colors.blue),
+                                  _buildMiniStatChip('Present', '$present', Colors.green),
+                                  _buildMiniStatChip('Absent', '$absent', Colors.red),
+                                  _buildMiniStatChip('Off', '$off', Colors.blue.shade300),
                                 ],
                               ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    }).toList(),
                   ],
                 ),
               );
@@ -915,6 +1017,22 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
     );
   }
 
+  Widget _buildMiniStatChip(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+          Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade700)),
+        ],
+      ),
+    );
+  }
   void _showAttendanceList(String title, List<QueryDocumentSnapshot> records, bool isFaculty) {
     showModalBottomSheet(
       context: context,
@@ -970,16 +1088,25 @@ class _ViewReportsScreenState extends State<ViewReportsScreen>
     );
   }
 
-  Widget _buildSummaryStatWrap(String label, String value, Color color) {
-    return Container(
+    Widget _buildSummaryStatWrap(String label, String value, Color color, {VoidCallback? onTap}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withOpacity(0.3))),
-      child: Column(children: [
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade700), textAlign: TextAlign.center),
-      ]),
-    );
-  }
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade700), textAlign: TextAlign.center),
+        ],
+      ),
+    ),
+  );
+}
 
   Widget _buildStatCardWrap(String label, String value, Color color, {VoidCallback? onTap}) {
     return GestureDetector(

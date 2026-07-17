@@ -13,6 +13,7 @@ import 'apply_leave_screen.dart';
 import 'my_leaves_screen.dart';
 import 'manage_leaves_screen.dart';
 import '../widgets/branding_footer.dart';
+import 'management_dashboard_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -117,7 +118,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   if (isAdmin || isFaculty) SizedBox(height: isMobile ? 8 : 10),
 
-                  // Main Action Cards Grid (Conditionally Rendered) - FIXED: Removed Expanded and added fixed height
+                  // Main Action Cards Grid (Conditionally Rendered)
                   SizedBox(
                     height: MediaQuery.of(context).size.height * 0.45, // Fixed height for GridView
                     child: GridView.count(
@@ -135,6 +136,9 @@ class HomeScreen extends StatelessWidget {
                         if (isAdmin || isFaculty || isViewer) _buildActionCard(context, 'Mark\nAttendance', Icons.check_circle, Colors.blue, () { Navigator.push(context, MaterialPageRoute(builder: (context) => const MarkAttendanceScreen())); }, isMobile),
                         if (isAdmin || isFaculty || isViewer) _buildActionCard(context, 'Faculty\nAttendance', Icons.person, Colors.red, () { Navigator.push(context, MaterialPageRoute(builder: (context) => const FacultyAttendanceScreen())); }, isMobile),
                         if (isAdmin || isFaculty || isViewer) _buildActionCard(context, 'View\nReports', Icons.analytics, Colors.teal, () { Navigator.push(context, MaterialPageRoute(builder: (context) => const ViewReportsScreen())); }, isMobile),
+                        
+                        // ✅ NEW MANAGEMENT DASHBOARD CARD (Admin & Faculty Only)
+                        if (isAdmin || isFaculty) _buildActionCard(context, 'Management\nDashboard', Icons.analytics_outlined, Colors.indigo, () { Navigator.push(context, MaterialPageRoute(builder: (context) => const ManagementDashboardScreen())); }, isMobile),
                       ],
                     ),
                   ),
