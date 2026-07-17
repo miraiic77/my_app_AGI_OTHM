@@ -10,6 +10,9 @@ class FacultyAttendanceScreen extends StatefulWidget {
 }
 
 class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
+  String _selectedSession = 'SESS1'; // Default to morning session
+  final List<String> _sessions = ['SESS1', 'SESS2'];
+  
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
   bool _isSaving = false;
@@ -55,11 +58,13 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
         _attendanceStatus[doc.id] = 'Present';
       }
 
-      // Load existing attendance for the selected date
       final dateStr = _formatDate(_selectedDate);
+      
+      // ✅ FILTER BY SESSION
       final existingAttendance = await FirebaseFirestore.instance
           .collection('faculty_attendance')
           .where('date', isEqualTo: dateStr)
+          .where('session', isEqualTo: _selectedSession)
           .get();
 
       if (existingAttendance.docs.isNotEmpty) {
@@ -72,7 +77,10 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
         }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('⚠️ Attendance already marked for this date. You can update it.'), backgroundColor: Colors.orange),
+            SnackBar(
+              content: Text('⚠️ $_selectedSession Faculty attendance already marked for this date. You can update it.'), 
+              backgroundColor: Colors.orange,
+            ),
           );
         }
       }
@@ -89,15 +97,18 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
     }
 
     final dateStr = _formatDate(_selectedDate);
+    
+    // ✅ CHECK EXISTING RECORDS FOR THIS SPECIFIC SESSION
     final existing = await FirebaseFirestore.instance
         .collection('faculty_attendance')
         .where('date', isEqualTo: dateStr)
+        .where('session', isEqualTo: _selectedSession)
         .get();
 
     if (existing.docs.isNotEmpty) {
       bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
         title: const Text('⚠️ Attendance Already Marked'),
-        content: Text('Attendance for ${_faculties.length} faculty on ${dateStr} already exists. Do you want to UPDATE it?'),
+        content: Text('$_selectedSession faculty attendance for ${_faculties.length} staff on ${dateStr} already exists. Do you want to UPDATE it?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
@@ -112,7 +123,7 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
     } else {
       bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
         title: const Text('Save Attendance'),
-        content: Text('Save attendance for ${_faculties.length} faculty on ${dateStr}?'),
+        content: Text('Save $_selectedSession faculty attendance for ${_faculties.length} staff on ${dateStr}?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
@@ -127,7 +138,6 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
 
-      // Delete existing records if any
       if (existing.docs.isNotEmpty) {
         for (var doc in existing.docs) await doc.reference.delete();
       }
@@ -138,9 +148,11 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
         final docRef = FirebaseFirestore.instance.collection('faculty_attendance').doc();
         batch.set(docRef, {
           'date': dateStr,
+          'session': _selectedSession, // ✅ SAVE SESSION TO DATABASE
           'facultyId': faculty['id'],
           'facultyName': faculty['name'],
           'email': faculty['email'],
+          'subject': faculty['subject'],
           'status': status,
           'markedBy': currentUser?.email ?? 'Unknown',
           'markedAt': Timestamp.now(),
@@ -153,11 +165,13 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(existing.docs.isNotEmpty ? '✅ Faculty attendance updated successfully!' : '✅ Faculty attendance saved successfully!'), 
+            content: Text(existing.docs.isNotEmpty 
+                ? '✅ $_selectedSession Faculty attendance updated successfully!' 
+                : '✅ $_selectedSession Faculty attendance saved successfully!'), 
             backgroundColor: Colors.green,
           ),
         );
-        _loadFaculties(); // Reload to refresh
+        _loadFaculties(); // Reload to refresh UI
       }
     } catch (e) {
       if (mounted) {
@@ -230,18 +244,43 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
           Container(
             padding: const EdgeInsets.all(16), 
             color: Colors.grey.shade100,
-            child: InkWell(
-              onTap: _pickDate, 
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Date', 
-                  border: OutlineInputBorder(), 
-                  filled: true, 
-                  fillColor: Colors.white, 
-                  suffixIcon: Icon(Icons.calendar_today)
-                ), 
-                child: Text(_formatDate(_selectedDate))
-              )
+            child: Column(
+              children: [
+                InkWell(
+                  onTap: _pickDate, 
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Date', 
+                      border: OutlineInputBorder(), 
+                      filled: true, 
+                      fillColor: Colors.white, 
+                      suffixIcon: Icon(Icons.calendar_today)
+                    ), 
+                    child: Text(_formatDate(_selectedDate))
+                  )
+                ),
+                const SizedBox(height: 12),
+                // ✅ NEW: SESSION SELECTOR
+                DropdownButtonFormField<String>(
+                  value: _selectedSession,
+                  decoration: const InputDecoration(
+                    labelText: 'Session *',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  items: _sessions.map((session) {
+                    String label = session == 'SESS1' ? 'SESS1 (Morning)' : 'SESS2 (Afternoon)';
+                    return DropdownMenuItem(value: session, child: Text(label));
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedSession = value!;
+                    });
+                    _loadFaculties();
+                  },
+                ),
+              ]
             ),
           ),
           if (_faculties.isNotEmpty)
@@ -368,7 +407,7 @@ class _FacultyAttendanceScreenState extends State<FacultyAttendanceScreen> {
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
                     : const Icon(Icons.save),
                   label: Text(
-                    _isSaving ? 'Saving...' : 'Save Attendance (${_faculties.length} faculty)', 
+                    _isSaving ? 'Saving...' : 'Save $_selectedSession Attendance (${_faculties.length} staff)', 
                     style: const TextStyle(fontSize: 16)
                   ),
                   style: ElevatedButton.styleFrom(

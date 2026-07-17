@@ -10,9 +10,12 @@ class MarkAttendanceScreen extends StatefulWidget {
 }
 
 class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
+  String _selectedSession = 'SESS1';
+  final List<String> _sessions = ['SESS1', 'SESS2'];
   String? _selectedBatchId;
   String? _selectedBatchName;
   DateTime _selectedDate = DateTime.now();
+  String _searchQuery = ''; // ✅ NEW: Search query
   bool _isLoading = false;
   bool _isSaving = false;
   
@@ -56,6 +59,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       final existingAttendance = await FirebaseFirestore.instance
           .collection('student_attendance')
           .where('date', isEqualTo: dateStr)
+          .where('session', isEqualTo: _selectedSession)
           .where('batchId', isEqualTo: _selectedBatchId)
           .get();
 
@@ -69,7 +73,10 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('⚠️ Attendance already marked for this date. You can update it.'), backgroundColor: Colors.orange),
+            SnackBar(
+              content: Text('⚠️ $_selectedSession Attendance already marked for this date. You can update it.'), 
+              backgroundColor: Colors.orange,
+            ),
           );
         }
       }
@@ -79,98 +86,98 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     setState(() => _isLoading = false);
   }
 
- Future<void> _saveAttendance() async {
-  if (_students.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No students to mark attendance for')));
-    return;
-  }
+  Future<void> _saveAttendance() async {
+    if (_students.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No students to mark attendance for')));
+      return;
+    }
 
-  // Check if attendance already exists
-  final dateStr = _formatDate(_selectedDate);
-  final existing = await FirebaseFirestore.instance
-      .collection('student_attendance')
-      .where('date', isEqualTo: dateStr)
-      .where('batchId', isEqualTo: _selectedBatchId)
-      .get();
+    final dateStr = _formatDate(_selectedDate);
+    final existing = await FirebaseFirestore.instance
+        .collection('student_attendance')
+        .where('date', isEqualTo: dateStr)
+        .where('session', isEqualTo: _selectedSession)
+        .where('batchId', isEqualTo: _selectedBatchId)
+        .get();
 
-  if (existing.docs.isNotEmpty) {
-    // Show confirmation dialog for update
-    bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('⚠️ Attendance Already Marked'),
-      content: Text('Attendance for ${_students.length} students on ${dateStr} already exists. Do you want to UPDATE it?'),
-          actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(ctx, true), 
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-          child: const Text('Update Anyway'),
-        ),
-      ],
-    ));
-
-    if (confirm != true) return; // User cancelled
-  } else {
-    // First time save confirmation
-    bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('Save Attendance'),
-      content: Text('Save attendance for ${_students.length} students on ${dateStr}?'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
-      ],
-    ));
-
-    if (confirm != true) return;
-  }
-
-  setState(() => _isSaving = true);
-
-  try {
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    // Delete existing records if any (for update)
     if (existing.docs.isNotEmpty) {
-      for (var doc in existing.docs) await doc.reference.delete();
+      bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('️ Attendance Already Marked'),
+        content: Text('$_selectedSession attendance for ${_students.length} students on ${dateStr} already exists. Do you want to UPDATE it?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true), 
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('Update Anyway'),
+          ),
+        ],
+      ));
+
+      if (confirm != true) return;
+    } else {
+      bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Save Attendance'),
+        content: Text('Save $_selectedSession attendance for ${_students.length} students on ${dateStr}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+        ],
+      ));
+
+      if (confirm != true) return;
     }
 
-    final batch = FirebaseFirestore.instance.batch();
-    for (var student in _students) {
-      final status = _attendanceStatus[student['id']] ?? 'Present';
-      final docRef = FirebaseFirestore.instance.collection('student_attendance').doc();
-      batch.set(docRef, {
-        'date': dateStr,
-        'batchId': _selectedBatchId,
-        'batchName': _selectedBatchName ?? '',
-        'studentId': student['id'],
-        'studentName': student['name'],
-        'rollNumber': student['rollNumber'],
-        'status': status,
-        'markedBy': currentUser?.email ?? 'Unknown',
-        'markedAt': Timestamp.now(),
-        'syncedToSheet': false,
-      });
+    setState(() => _isSaving = true);
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      if (existing.docs.isNotEmpty) {
+        for (var doc in existing.docs) await doc.reference.delete();
+      }
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (var student in _students) {
+        final status = _attendanceStatus[student['id']] ?? 'Present';
+        final docRef = FirebaseFirestore.instance.collection('student_attendance').doc();
+        batch.set(docRef, {
+          'date': dateStr,
+          'session': _selectedSession,
+          'batchId': _selectedBatchId,
+          'batchName': _selectedBatchName ?? '',
+          'studentId': student['id'],
+          'studentName': student['name'],
+          'rollNumber': student['rollNumber'],
+          'status': status,
+          'markedBy': currentUser?.email ?? 'Unknown',
+          'markedAt': Timestamp.now(),
+          'syncedToSheet': false,
+        });
+      }
+      
+      await batch.commit();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(existing.docs.isNotEmpty 
+                ? '✅ $_selectedSession Attendance updated successfully!' 
+                : '✅ $_selectedSession Attendance saved successfully!'), 
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+      }
     }
     
-    await batch.commit();
-    
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(existing.docs.isNotEmpty ? '✅ Attendance updated successfully!' : '✅ Attendance saved successfully!'), 
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+      setState(() => _isSaving = false);
     }
   }
-  
-  if (mounted) {
-    setState(() => _isSaving = false);
-  }
-}
 
   void _markAllStatus(String status) { 
     setState(() { 
@@ -264,6 +271,50 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                     child: Text(_formatDate(_selectedDate))
                   )
                 ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _selectedSession,
+                  decoration: const InputDecoration(
+                    labelText: 'Session *',
+                    border: OutlineInputBorder(),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                  items: _sessions.map((session) {
+                    String label = session == 'SESS1' ? 'SESS1 (Morning)' : 'SESS2 (Afternoon)';
+                    return DropdownMenuItem(value: session, child: Text(label));
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedSession = value!;
+                    });
+                    if (_selectedBatchId != null) _loadStudents();
+                  },
+                ),
+                const SizedBox(height: 12),
+                // ✅ NEW: SEARCH BAR
+                TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or roll number...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value.toLowerCase());
+                  },
+                ),
               ]
             ),
           ),
@@ -323,9 +374,21 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                   ? const Center(child: Text('No students in this batch', style: TextStyle(color: Colors.grey, fontSize: 16)))
                   : ListView.builder(
                       padding: const EdgeInsets.all(8),
-                      itemCount: _students.length,
+                      itemCount: _students.where((student) {
+                        if (_searchQuery.isEmpty) return true;
+                        final name = (student['name'] ?? '').toLowerCase();
+                        final roll = (student['rollNumber'] ?? '').toLowerCase();
+                        return name.contains(_searchQuery) || roll.contains(_searchQuery);
+                      }).length,
                       itemBuilder: (context, index) {
-                        final student = _students[index];
+                        final filteredStudents = _students.where((student) {
+                          if (_searchQuery.isEmpty) return true;
+                          final name = (student['name'] ?? '').toLowerCase();
+                          final roll = (student['rollNumber'] ?? '').toLowerCase();
+                          return name.contains(_searchQuery) || roll.contains(_searchQuery);
+                        }).toList();
+                        
+                        final student = filteredStudents[index];
                         final status = _attendanceStatus[student['id']] ?? 'Present';
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 8),
@@ -393,7 +456,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
                     : const Icon(Icons.save),
                   label: Text(
-                    _isSaving ? 'Saving...' : 'Save Attendance (${_students.length} students)', 
+                    _isSaving ? 'Saving...' : 'Save $_selectedSession Attendance (${_students.length} students)', 
                     style: const TextStyle(fontSize: 16)
                   ),
                   style: ElevatedButton.styleFrom(
@@ -480,8 +543,8 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) { 
-      case 'Present': return Colors.green; 
-      case 'Absent': return Colors.red; 
+      case 'present': return Colors.green; 
+      case 'absent': return Colors.red; 
       case 'off': return Colors.blue; 
       case 'holiday': return Colors.orange; 
       case 'course completed': return Colors.teal; 
